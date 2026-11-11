@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Energy Audit</title>
+<style>
+  :root { --bg:#f5f7f6; --card:#fff; --ink:#16211c; --mute:#5d6b64; --line:#dfe5e1;
+          --brand:#0f7a4f; --warn:#b45309; --bad:#b91c1c; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0f1512; --card:#18211c; --ink:#e8efeb; --mute:#97a79e; --line:#2a3630; --brand:#34c98a; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--ink); }
+  header { padding:18px 24px; border-bottom:1px solid var(--line); background:var(--card); display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between; }
+  h1 { font-size:20px; margin:0; } h2 { font-size:16px; margin:0 0 12px; }
+  main { max-width:1200px; margin:0 auto; padding:20px 16px 60px; display:grid; gap:16px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; }
+  .grid { display:grid; gap:12px; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); }
+  label { display:block; font-size:12px; color:var(--mute); margin-bottom:3px; }
+  input { width:100%; padding:7px 9px; border:1px solid var(--line); border-radius:8px; background:transparent; color:var(--ink); font:inherit; }
+  input:focus { outline:2px solid var(--brand); outline-offset:-1px; }
+  table { width:100%; border-collapse:collapse; }
+  th { text-align:left; font-size:12px; color:var(--mute); font-weight:600; padding:4px 6px; }
+  td { padding:4px 6px; vertical-align:middle; }
+  td.num { text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
+  .tablewrap { overflow-x:auto; }
+  button { font:inherit; padding:8px 14px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); cursor:pointer; }
+  button.primary { background:var(--brand); border-color:var(--brand); color:#fff; }
+  button:hover { filter:brightness(.95); }
+  .kpi { border:1px solid var(--line); border-radius:10px; padding:12px; }
+  .kpi .v { font-size:22px; font-weight:700; font-variant-numeric:tabular-nums; }
+  .kpi .l { font-size:12px; color:var(--mute); }
+  .bar { height:14px; background:var(--brand); border-radius:4px; min-width:2px; }
+  .barrow { display:grid; grid-template-columns:minmax(90px,200px) 1fr 110px; gap:10px; align-items:center; margin:6px 0; font-size:13px; }
+  .barrow .t { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #error { display:none; background:#fee2e2; color:var(--bad); border:1px solid #fecaca; padding:10px 14px; border-radius:8px; }
+  .insight { padding:8px 12px; border-left:3px solid var(--warn); background:rgba(180,83,9,.08); margin:6px 0; border-radius:4px; }
+  .actions { display:flex; flex-wrap:wrap; gap:8px; }
+  .note { color:var(--mute); font-size:12px; }
+  .save { color:var(--brand); font-weight:700; }
+  @media print { header .actions, .noprint, button { display:none !important; } body { background:#fff; color:#000; } .card { break-inside:avoid; } }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Energy Audit</h1>
+    <div class="note">Know what every machine costs you. Find the savings.</div>
+  </div>
+  <div class="actions">
+    <button id="btnPrint">Print report</button>
+    <button id="btnCsv">Export CSV</button>
+    <button id="btnSave">Save file</button>
+    <button id="btnLoad">Open file</button>
+    <input id="fileLoad" type="file" accept=".json,application/json" hidden>
+  </div>
+</header>
+
+<main>
+  <div id="error" role="alert"></div>
+
+  <section class="card">
+    <h2>Organisation</h2>
+    <div class="grid">
+      <div><label for="org">Company / site name</label><input id="org" placeholder="e.g. Lagos Plastics Ltd, Ikeja plant"></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Energy supply</h2>
+    <div class="grid" id="settings"></div>
+    <p class="note">Defaults are placeholders. Replace the tariff with the figure on your latest bill and the diesel price with what you pay today.</p>
+  </section>
+
+  <section class="card">
+    <h2>Machines</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Name</th><th>Power (W)</th><th>Qty</th><th>Hours/day</th><th>Load %</th><th>Days/month</th>
+          <th style="text-align:right">kWh/month</th><th style="text-align:right">Cost/month</th><th class="noprint"></th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+    <p class="noprint"><button id="btnAdd">+ Add machine</button></p>
+    <p class="note">Load % is the average share of rated power the machine actually draws (use 100 if unsure).</p>
+  </section>
+
+  <section class="card">
+    <h2>Summary</h2>
+    <div class="grid" id="kpis"></div>
+    <div id="insights"></div>
+  </section>
+
+  <section class="card">
+    <h2>Where the money goes</h2>
+    <div id="chart"></div>
+  </section>
+
+  <section class="card">
+    <h2>What if? Savings scenario</h2>
+    <div class="grid" id="whatif"></div>
+    <div class="grid" id="scenario" style="margin-top:12px"></div>
+  </section>
+</main>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const naira = (n) => "₦" + Number(n).toLocaleString("en-NG", { maximumFractionDigits: 0 });
+const num = (n, d = 1) => Number(n).toLocaleString("en-NG", { maximumFractionDigits: d });
+
+const SETTING_FIELDS = [
+  ["tariff", "Grid tariff (₦/kWh)"],
+  ["generator_share", "Energy from generator (%)"],
+  ["diesel_price", "Diesel price (₦/litre)"],
+  ["kwh_per_litre", "Generator kWh per litre"],
+  ["grid_co2", "Grid CO₂ (kg/kWh)"],
+  ["diesel_co2", "Diesel CO₂ (kg/litre)"],
+];
+const WHATIF_FIELDS = [
+  ["efficiency_gain", "Efficiency upgrades save (%)"],
+  ["solar_share", "Solar covers remaining (%)"],
+];
+
+const DEFAULT_STATE = {
+  org: "",
+  settings: { tariff: 209.5, generator_share: 30, diesel_price: 1200, kwh_per_litre: 3,
+              grid_co2: 0.43, diesel_co2: 2.68, efficiency_gain: 10, solar_share: 20 },
+  machines: [
+    { name: "Air compressor", power_watts: 15000, quantity: 2, hours_per_day: 10, load_factor: 70, days_per_month: 26 },
+    { name: "Extruder", power_watts: 22000, quantity: 1, hours_per_day: 12, load_factor: 80, days_per_month: 26 },
+    { name: "Lighting", power_watts: 40, quantity: 120, hours_per_day: 12, load_factor: 100, days_per_month: 30 },
+    { name: "Air conditioning", power_watts: 2500, quantity: 8, hours_per_day: 9, load_factor: 60, days_per_month: 26 },
+  ],
+};
+
+let state = loadState();
+let lastResult = null;
+let timer = null;
+
+function loadState() {
+  try {
+    const s = JSON.parse(localStorage.getItem("energyAudit"));
+    if (s && Array.isArray(s.machines) && s.settings) return s;
+  } catch (e) { /* storage unavailable: fall through */ }
+  return JSON.parse(JSON.stringify(DEFAULT_STATE));
+}
+function persist() { try { localStorage.setItem("energyAudit", JSON.stringify(state)); } catch (e) {} }
+
+function field(container, key, label, target) {
+  const wrap = document.createElement("div");
+  const l = document.createElement("label"); l.textContent = label; l.htmlFor = "s_" + key;
+  const i = document.createElement("input");
+  i.id = "s_" + key; i.type = "number"; i.step = "any"; i.value = target[key] ?? "";
+  i.addEventListener("input", () => { target[key] = i.value; changed(); });
+  wrap.append(l, i); container.append(wrap);
+}
+
+function buildSettings() {
+  SETTING_FIELDS.forEach(([k, l]) => field($("settings"), k, l, state.settings));
+  WHATIF_FIELDS.forEach(([k, l]) => field($("whatif"), k, l, state.settings));
+  $("org").value = state.org || "";
+  $("org").addEventListener("input", () => { state.org = $("org").value; persist(); });
+}
+
+function buildRows() {
+  const body = $("rows"); body.replaceChildren();
+  state.machines.forEach((m, idx) => {
+    const tr = document.createElement("tr");
+    const cols = [["name","text",150],["power_watts","number",90],["quantity","number",60],
+                  ["hours_per_day","number",80],["load_factor","number",70],["days_per_month","number",80]];
+    cols.forEach(([k, type, w]) => {
+      const td = document.createElement("td");
+      const i = document.createElement("input");
+      i.type = type; if (type === "number") i.step = "any";
+      i.style.minWidth = w + "px"; i.value = m[k] ?? "";
+      i.setAttribute("aria-label", k.replace(/_/g, " ") + " row " + (idx + 1));
+      i.addEventListener("input", () => { m[k] = i.value; changed(); });
+      td.append(i); tr.append(td);
+    });
+    const kwh = document.createElement("td"); kwh.className = "num"; kwh.dataset.kwh = idx;
+    const cost = document.createElement("td"); cost.className = "num"; cost.dataset.cost = idx;
+    const del = document.createElement("td"); del.className = "noprint";
+    const b = document.createElement("button"); b.textContent = "✕"; b.title = "Remove machine";
+    b.addEventListener("click", () => { state.machines.splice(idx, 1); buildRows(); changed(); });
+    del.append(b);
+    tr.append(kwh, cost, del); body.append(tr);
+  });
+}
+
+function payload() {
+  return {
+    org: state.org,
+    settings: state.settings,
+    machines: state.machines.map((m) => ({
+      ...m,
+      load_factor: m.load_factor === "" || m.load_factor == null ? 1 : Number(m.load_factor) / 100,
+    })),
+  };
+}
+
+function changed() { persist(); clearTimeout(timer); timer = setTimeout(calculate, 250); }
+
+async function calculate() {
+  try {
+    const res = await fetch("/api/calculate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload()) });
+    const data = await res.json();
+    if (!res.ok) { showError(data.error || "Something went wrong."); return; }
+    showError(""); lastResult = data; render(data);
+  } catch (e) { showError("Cannot reach the server. Is app.py still running?"); }
+}
+
+function showError(msg) { const e = $("error"); e.textContent = msg; e.style.display = msg ? "block" : "none"; }
+
+function kpi(label, value) {
+  const d = document.createElement("div"); d.className = "kpi";
+  const v = document.createElement("div"); v.className = "v"; v.textContent = value;
+  const l = document.createElement("div"); l.className = "l"; l.textContent = label;
+  d.append(v, l); return d;
+}
+
+function render(r) {
+  r.machines.forEach((m, i) => {
+    const k = document.querySelector(`[data-kwh="${i}"]`), c = document.querySelector(`[data-cost="${i}"]`);
+    if (k) k.textContent = num(m.kwh_month); if (c) c.textContent = naira(m.cost_month);
+  });
+  const t = r.totals, s = r.scenario;
+  $("kpis").replaceChildren(
+    kpi("Energy per month", num(t.kwh_month) + " kWh"),
+    kpi("Cost per month", naira(t.cost_month)),
+    kpi("Cost per year", naira(t.cost_year)),
+    kpi("Blended cost per kWh", naira(t.blended_rate)),
+    kpi("Connected load", num(t.connected_kw) + " kW"),
+    kpi("Diesel per month", num(t.diesel_litres, 0) + " litres"),
+    kpi("CO₂ per month", num(t.co2_kg, 0) + " kg"),
+  );
+  $("insights").replaceChildren(...r.insights.map((txt) => { const d = document.createElement("div"); d.className = "insight"; d.textContent = txt; return d; }));
+
+  const max = Math.max(...r.machines.map((m) => m.cost_month), 1);
+  const sorted = [...r.machines].sort((a, b) => b.cost_month - a.cost_month);
+  $("chart").replaceChildren(...sorted.map((m) => {
+    const row = document.createElement("div"); row.className = "barrow";
+    const n = document.createElement("div"); n.className = "t"; n.textContent = m.name; n.title = m.name;
+    const track = document.createElement("div"); const bar = document.createElement("div"); bar.className = "bar";
+    bar.style.width = (100 * m.cost_month / max) + "%"; track.append(bar);
+    const v = document.createElement("div"); v.style.textAlign = "right"; v.textContent = naira(m.cost_month) + " (" + num(m.share_pct, 0) + "%)";
+    row.append(n, track, v); return row;
+  }));
+
+  const sv = document.createElement("div"); sv.className = "kpi";
+  $("scenario").replaceChildren(
+    kpi("Cost per month after changes", naira(s.cost_month)),
+    (() => { const k = kpi("Saving per month", naira(s.saving_month)); k.querySelector(".v").classList.add("save"); return k; })(),
+    (() => { const k = kpi("Saving per year", naira(s.saving_year)); k.querySelector(".v").classList.add("save"); return k; })(),
+    kpi("CO₂ avoided per month", num(s.co2_saved_kg, 0) + " kg"),
+  );
+}
+
+$("btnAdd").addEventListener("click", () => {
+  state.machines.push({ name: "", power_watts: "", quantity: 1, hours_per_day: "", load_factor: 100, days_per_month: 30 });
+  buildRows(); changed();
+});
+$("btnPrint").addEventListener("click", () => window.print());
+
+function download(name, text, type) {
+  const url = URL.createObjectURL(new Blob([text], { type }));
+  const a = document.createElement("a"); a.href = url; a.download = name; document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+$("btnCsv").addEventListener("click", async () => {
+  try {
+    const res = await fetch("/api/export.csv", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload()) });
+    if (!res.ok) { showError((await res.json()).error || "Export failed."); return; }
+    download("energy-report.csv", await res.text(), "text/csv");
+  } catch (e) { showError("Cannot reach the server."); }
+});
+$("btnSave").addEventListener("click", () => download("energy-audit.json", JSON.stringify(state, null, 2), "application/json"));
+$("btnLoad").addEventListener("click", () => $("fileLoad").click());
+$("fileLoad").addEventListener("change", async (e) => {
+  const f = e.target.files[0]; if (!f) return;
+  try {
+    const s = JSON.parse(await f.text());
+    if (!Array.isArray(s.machines) || typeof s.settings !== "object") throw new Error();
+    state = s; persist(); location.reload();
+  } catch (err) { showError("That file is not a valid Energy Audit file."); }
+  e.target.value = "";
+});
+
+buildSettings(); buildRows(); persist(); calculate();
+</script>
+</body>
+</html>
